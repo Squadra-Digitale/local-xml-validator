@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<!-- Netzwerk komplett gesperrt: keine Verbindung nach außen möglich (connect-src 'none'). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src blob:; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XML-Validator (lokal)</title>
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --ink: #1b1f24; --muted: #616b77; --line: #dde1e6; --soft: #eef1f4;
+  --accent: #0f6b6b; --accent-ink: #ffffff; --accent-soft: #e3f1f0;
+  --err: #b42318; --err-soft: #fdecea; --warn: #a15c00; --warn-soft: #fff4e0; --info: #1d5fa8; --info-soft: #e8f0fb;
+  --ok: #157347; --ok-soft: #e6f4ec;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa4af; --line: #2c333b; --soft: #222830;
+    --accent: #3fb5b0; --accent-ink: #0c1414; --accent-soft: #173533;
+    --err: #ff8a80; --err-soft: #3a1d1b; --warn: #f5b454; --warn-soft: #382a14; --info: #8ab8ff; --info-soft: #1a2a40;
+    --ok: #6fd39b; --ok-soft: #173326;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa4af; --line: #2c333b; --soft: #222830;
+  --accent: #3fb5b0; --accent-ink: #0c1414; --accent-soft: #173533;
+  --err: #ff8a80; --err-soft: #3a1d1b; --warn: #f5b454; --warn-soft: #382a14; --info: #8ab8ff; --info-soft: #1a2a40;
+  --ok: #6fd39b; --ok-soft: #173326;
+  color-scheme: dark;
+}
+/* Sprache: statische Texte stehen doppelt im Markup, die jeweils andere wird ausgeblendet */
+:root[lang="de"] [lang="en"], :root[lang="en"] [lang="de"] { display: none !important; }
+.hdr-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.hdr-tools .badge { margin-left: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header.top { background: var(--panel); border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1100px; margin: 0 auto; padding-inline: 20px; }
+header.top .wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-block: 14px; }
+h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+h1 small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
+.badge { margin-left: auto; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; cursor: help; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.badge.ok::before { content: "● "; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge.pending { color: var(--muted); }
+main { padding-block: 20px 60px; display: grid; gap: 16px; }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.card h2 .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select, input[type=text], input[type=search], textarea { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+select { min-width: 0; flex: 1 1 260px; max-width: 480px; }
+textarea { width: 100%; min-height: 220px; font-family: var(--mono); font-size: 12.5px; resize: vertical; }
+.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--soft); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 9px 20px; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn.danger { color: var(--err); }
+.icon-btn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.icon-btn:hover { background: var(--soft); color: var(--err); }
+.muted { color: var(--muted); } .small { font-size: 12px; } .center { text-align: center; }
+#profile-info { margin-top: 12px; }
+.desc { margin: 0 0 8px; }
+.help summary { cursor: pointer; }
+.help ol { margin: 10px 0 6px; padding-left: 22px; display: grid; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--soft); }
+.chip.entry { background: var(--accent-soft); color: var(--accent); font-family: var(--mono); font-size: 11.5px; }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; color: var(--muted); transition: background .15s, border-color .15s; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.drop .row { justify-content: center; margin-top: 10px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.tab { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; cursor: pointer; color: var(--muted); }
+.tab.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+#doc-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+#doc-list li { display: flex; gap: 10px; align-items: center; padding: 5px 8px; background: var(--soft); border-radius: 6px; }
+.doc-name { font-family: var(--mono); font-size: 12.5px; flex: 1; overflow-wrap: anywhere; }
+.run-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+#run-status { color: var(--muted); }
+#results-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#results-head h2 { margin: 0; }
+.filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.filters label { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; }
+#flt-q { width: 200px; }
+#summary-all { width: 100%; color: var(--muted); font-size: 13px; }
+#results { display: grid; gap: 12px; }
+details.report { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+details.report > summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 18px; border-left: 5px solid var(--ok); }
+details.report > summary::-webkit-details-marker { display: none; }
+details.report.res-FAILURE > summary { border-left-color: var(--err); }
+details.report.res-WARNING > summary { border-left-color: var(--warn); }
+.result { font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 4px; }
+.r-SUCCESS { background: var(--ok-soft); color: var(--ok); } .r-WARNING { background: var(--warn-soft); color: var(--warn); } .r-FAILURE { background: var(--err-soft); color: var(--err); }
+.rep-name { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; flex: 1 1 200px; }
+.counts { display: flex; gap: 10px; font-size: 13px; }
+.c.error { color: var(--err); } .c.warning { color: var(--warn); } .c.info { color: var(--info); }
+.rep-body { padding: 4px 18px 18px; border-top: 1px solid var(--line); }
+dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 12px 0; font-size: 13px; }
+dl.meta dt { color: var(--muted); } dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+.hash { font-family: var(--mono); font-size: 11.5px; }
+.steps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.step { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+.step.ok { background: var(--ok-soft); color: var(--ok); } .step.bad { background: var(--err-soft); color: var(--err); }
+.notes { background: var(--warn-soft); color: var(--ink); border-radius: 6px; padding: 8px 12px 8px 28px; font-size: 13px; margin: 0 0 10px; }
+.rep-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.all-good { background: var(--ok-soft); color: var(--ok); padding: 12px 14px; border-radius: 6px; margin: 0; }
+ol.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.item { border: 1px solid var(--line); border-left: 4px solid var(--err); border-radius: 6px; padding: 8px 12px; }
+.item.sev-warning { border-left-color: var(--warn); } .item.sev-info { border-left-color: var(--info); }
+.item-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.sev { font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.sev.error { background: var(--err-soft); color: var(--err); } .sev.warning { background: var(--warn-soft); color: var(--warn); } .sev.info { background: var(--info-soft); color: var(--info); }
+.src-tag { color: var(--muted); }
+.rule-id { font-family: var(--mono); background: var(--soft); padding: 0 6px; border-radius: 3px; }
+.line { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.msg { margin: 4px 0 2px; overflow-wrap: anywhere; }
+.loc { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+details.more { margin-top: 4px; font-size: 12.5px; }
+details.more summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+details.more > div { margin-top: 4px; overflow-wrap: anywhere; }
+details.more code { font-family: var(--mono); font-size: 11.5px; }
+.src { margin-top: 8px; background: var(--soft); border-radius: 6px; overflow-x: auto; font-family: var(--mono); font-size: 12px; padding: 6px 0; }
+.src-line { display: flex; white-space: pre; }
+.src-line .ln { flex: 0 0 52px; text-align: right; padding-right: 12px; color: var(--muted); user-select: none; }
+.src-line.hit { background: var(--warn-soft); }
+.src-line.hit .ln { color: var(--warn); font-weight: 700; }
+dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 40px); background: var(--panel); color: var(--ink); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.dlg-body { padding: 20px 22px; display: grid; gap: 12px; }
+.dlg-body h3 { margin: 0; font-size: 16px; }
+.field { display: grid; gap: 4px; } .field label { font-size: 12.5px; color: var(--muted); }
+.field input, .field textarea { width: 100%; }
+.field textarea { min-height: 54px; font-family: inherit; font-size: 14px; }
+.tbl-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { position: sticky; top: 0; background: var(--soft); font-weight: 600; font-size: 12px; }
+td.path { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+td.num { white-space: nowrap; color: var(--muted); }
+.kind { font-size: 11.5px; padding: 1px 6px; border-radius: 3px; background: var(--soft); white-space: nowrap; }
+.k-xsd { background: var(--info-soft); color: var(--info); } .k-sch, .k-xslt { background: var(--accent-soft); color: var(--accent); }
+.dlg-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--line); background: var(--soft); align-items: center; flex-wrap: wrap; }
+#pe-msg { margin-right: auto; color: var(--muted); font-size: 13px; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 8px; max-width: min(640px, calc(100vw - 32px)); white-space: pre-line; transition: .2s; font-size: 13px; z-index: 10; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { background: var(--err); color: #fff; }
+.privacy { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; }
+.privacy b { color: var(--ink); }
+footer { font-size: 12px; color: var(--muted); padding-bottom: 30px; }
+footer details summary { cursor: pointer; }
+footer pre { white-space: pre-wrap; font-size: 11px; }
+@media (max-width: 640px) { .filters { margin-left: 0; } #flt-q { width: 100%; } .line { margin-left: 0; } }
+@media print {
+  .hdr-tools, .no-print, section.card, .filters, footer, details.more summary { display: none !important; }
+  body { background: #fff; color: #000; }
+  details.report { break-inside: auto; border-color: #999; }
+  details.more > div, .src { display: block !important; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>XML-Validator <small><span lang="de">lokal</span><span lang="en">local</span> · XSD &amp; Schematron</small></h1>
+    <div class="hdr-tools">
+      <span id="net-badge" class="badge pending"></span>
+      <button class="btn small" id="btn-lang" title="Sprache wechseln" data-en-title="Switch language"><span lang="de">EN</span><span lang="en">DE</span></button>
+      <button class="btn small" id="btn-theme" title="Hell/Dunkel umschalten" data-en-title="Toggle light/dark mode" aria-label="Theme">◐</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <details class="card help" open>
+    <summary><b><span lang="de">So funktioniert's</span><span lang="en">How it works</span></b> <span class="muted"><span lang="de">(zum Ausblenden klicken)</span><span lang="en">(click to hide)</span></span></summary>
+    <ol lang="de">
+      <li><b>Prüfprofil wählen.</b> Ein Profil enthält die Regeln, nach denen geprüft wird. Wenn Sie eine Profildatei (<code>….xvprofile.json</code>) bekommen haben: einmalig auf <b>„Importieren“</b> klicken und die Datei auswählen. Danach ist das Profil dauerhaft gespeichert.</li>
+      <li><b>XML-Datei hinzufügen.</b> Datei in das gestrichelte Feld ziehen oder auf <b>„Dateien auswählen …“</b> klicken.</li>
+      <li><b>Auf „Prüfen“ klicken.</b> Unten erscheint das Ergebnis: <span class="result r-SUCCESS">Gültig</span> = alles in Ordnung, <span class="result r-FAILURE">Ungültig</span> = es gibt Fehler, die behoben werden müssen. Jeder Fehler wird mit Zeilennummer und Beschreibung aufgelistet.</li>
+    </ol>
+    <ol lang="en">
+      <li><b>Choose a validation profile.</b> A profile contains the rules used for validation. If you received a profile file (<code>….xvprofile.json</code>): click <b>“Import”</b> once and select the file. The profile is then stored permanently.</li>
+      <li><b>Add an XML file.</b> Drag it into the dashed area or click <b>“Choose files …”</b>.</li>
+      <li><b>Click “Validate”.</b> The result appears below: <span class="result r-SUCCESS">Valid</span> = everything is fine, <span class="result r-FAILURE">Invalid</span> = there are errors that need fixing. Each error is listed with line number and description.</li>
+    </ol>
+    <p class="muted small"><span lang="de">Ihre Dateien bleiben auf diesem Computer. Das Werkzeug funktioniert ohne Internet und sendet nichts weg.</span><span lang="en">Your files stay on this computer. The tool works without internet and sends nothing anywhere.</span></p>
+  </details>
+
+  <section class="card">
+    <h2><span class="n">1</span> <span lang="de">Prüfprofil</span><span lang="en">Validation profile</span></h2>
+    <div class="row">
+      <select id="profile-select" aria-label="Profil" title="Hier wählen Sie, nach welchen Regeln geprüft wird (z. B. XRechnung)." data-en-title="Choose which rules to validate against (e.g. XRechnung)."></select>
+      <button class="btn" id="btn-new" title="Neues Profil aus Regeldateien (XSD/Schematron) anlegen – meist nicht nötig, wenn Sie ein Profil importiert haben." data-en-title="Create a new profile from rule files (XSD/Schematron) – usually not needed if you imported a profile."><span lang="de">Neues Profil</span><span lang="en">New profile</span></button>
+      <button class="btn" id="btn-edit" title="Name oder Regeldateien des gewählten Profils ändern." data-en-title="Change name or rule files of the selected profile."><span lang="de">Bearbeiten</span><span lang="en">Edit</span></button>
+      <button class="btn" id="btn-export" title="Profil (nur Schemadateien) als Datei speichern, z. B. zur Weitergabe an Kolleg:innen" data-en-title="Save the profile (schema files only) as a file, e.g. to share with colleagues"><span lang="de">Exportieren</span><span lang="en">Export</span></button>
+      <button class="btn" id="btn-import" title="Eine erhaltene Profildatei (….xvprofile.json) laden. Nur einmal nötig – das Profil bleibt danach gespeichert." data-en-title="Load a profile file you received (….xvprofile.json). Only needed once – the profile stays stored."><span lang="de">Importieren</span><span lang="en">Import</span></button>
+      <button class="btn danger" id="btn-delete" title="Gewähltes Profil entfernen (Ihre XML-Dateien sind davon nicht betroffen)." data-en-title="Remove the selected profile (your XML files are not affected)."></button>
+      <input type="file" id="import-file" accept=".json" hidden>
+    </div>
+    <div id="profile-info"></div>
+    <div id="store-note" class="muted small"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">2</span> <span lang="de">Zu prüfende XML-Dokumente</span><span lang="en">XML documents to validate</span></h2>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="files" role="tab" aria-selected="true" title="XML-Dateien von Ihrem Computer prüfen" data-en-title="Validate XML files from your computer"><span lang="de">Dateien</span><span lang="en">Files</span></button>
+      <button class="tab" data-tab="paste" role="tab" aria-selected="false" title="XML-Inhalt aus der Zwischenablage einfügen und prüfen" data-en-title="Paste XML content from the clipboard and validate it"><span lang="de">Text einfügen</span><span lang="en">Paste text</span></button>
+    </div>
+    <div id="panel-files" class="tab-panel">
+      <div class="drop" id="doc-drop">
+        <span lang="de">XML-Dateien oder Ordner hierher ziehen</span><span lang="en">Drag XML files or folders here</span>
+        <div class="row"><button class="btn" id="doc-pick"><span lang="de">Dateien auswählen …</span><span lang="en">Choose files …</span></button></div>
+        <input type="file" id="doc-input" multiple accept=".xml,text/xml,application/xml,*/*" hidden>
+      </div>
+      <ul id="doc-list"></ul>
+      <p id="doc-empty" class="muted small"><span lang="de">Noch keine Dokumente ausgewählt. Mehrere Dateien werden nacheinander geprüft.</span><span lang="en">No documents selected yet. Multiple files are validated one after another.</span></p>
+    </div>
+    <div id="panel-paste" class="tab-panel" hidden>
+      <textarea id="paste" spellcheck="false" placeholder="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt; …"></textarea>
+    </div>
+    <div class="run-row">
+      <button class="btn primary" id="btn-run" disabled title="Startet die Prüfung aller ausgewählten Dateien. Wird aktiv, sobald eine Datei hinzugefügt ist." data-en-title="Validates all selected files. Becomes active once a file is added."><span lang="de">Prüfen</span><span lang="en">Validate</span></button>
+      <button class="btn" id="btn-clear" title="Dokumente und Berichte aus dem Arbeitsspeicher entfernen" data-en-title="Remove documents and reports from memory"><span lang="de">Alles leeren</span><span lang="en">Clear all</span></button>
+      <span id="run-status" aria-live="polite"></span>
+    </div>
+    <div class="privacy" style="margin-top:14px">
+      <div lang="de"><b>Datenschutz:</b> Dokumente werden ausschließlich im Arbeitsspeicher dieses Browser-Tabs verarbeitet, nie gespeichert und nie übertragen. Netzwerkzugriffe sind technisch gesperrt. Schließen des Tabs entfernt alle Daten.</div>
+      <div lang="en"><b>Privacy:</b> Documents are processed only in the memory of this browser tab, never stored and never transmitted. Network access is technically blocked. Closing the tab removes all data.</div>
+    </div>
+  </section>
+
+  <div id="results-head" hidden>
+    <h2><span lang="de">Prüfberichte</span><span lang="en">Validation reports</span></h2>
+    <div class="filters no-print">
+      <label title="Muss behoben werden – sonst ist das Dokument ungültig." data-en-title="Must be fixed – otherwise the document is invalid."><input type="checkbox" class="flt" value="error" checked> <span lang="de">Fehler</span><span lang="en">Errors</span></label>
+      <label title="Sollte geprüft werden, macht das Dokument aber nicht ungültig." data-en-title="Should be reviewed, but does not make the document invalid."><input type="checkbox" class="flt" value="warning" checked> <span lang="de">Warnungen</span><span lang="en">Warnings</span></label>
+      <label title="Nur ein Hinweis, kein Handlungsbedarf." data-en-title="Just a note, no action needed."><input type="checkbox" class="flt" value="info" checked> Infos</label>
+      <input type="search" id="flt-q" placeholder="Befunde durchsuchen …" data-en-placeholder="Search findings …" title="Nach Wörtern oder Regelnummern (z. B. BR-CO-10) in den Meldungen suchen" data-en-title="Search messages for words or rule IDs (e.g. BR-CO-10)">
+      <button class="btn small" id="btn-print" title="Bericht ausdrucken oder im Druckdialog „Als PDF speichern“ wählen" data-en-title="Print the report or choose “Save as PDF” in the print dialog"><span lang="de">Drucken / PDF</span><span lang="en">Print / PDF</span></button>
+    </div>
+    <div id="summary-all"></div>
+  </div>
+  <div id="results"></div>
+
+  <footer>
+    <details>
+      <summary><span lang="de">Über dieses Werkzeug &amp; Lizenzen</span><span lang="en">About this tool &amp; licenses</span></summary>
+      <p lang="de">Lokale Browser-Umsetzung angelehnt an den <a href="https://github.com/ISAITB/xml-validator" rel="noreferrer">ITB XML Validator</a> (Prüfprofile mit XSD und Schematron, Berichte im GITB-TAR-Format). XSD-Prüfung und Wohlgeformtheit: libxml2 (xmllint-wasm, MIT). Schematron: eigene ISO-Schematron-Engine mit XPath 3.1 über SaxonJS; vorkompilierte Schematron-XSLT nur in Version 1.0. Einschränkungen: keine <code>xsl:function</code>/<code>xsl:key</code> in Schematron-Dateien, kein Nachladen externer Ressourcen (<code>document()</code>, Remote-Schemas).</p>
+      <p lang="en">Local in-browser implementation inspired by the <a href="https://github.com/ISAITB/xml-validator" rel="noreferrer">ITB XML Validator</a> (validation profiles with XSD and Schematron, reports in GITB TAR format). XSD and well-formedness: libxml2 (xmllint-wasm, MIT). Schematron: custom ISO Schematron engine with XPath 3.1 via SaxonJS; precompiled Schematron XSLT only in version 1.0. Limitations: no <code>xsl:function</code>/<code>xsl:key</code> in Schematron files, no loading of external resources (<code>document()</code>, remote schemas).</p>
+      <pre>%%LICENSES%%</pre>
+    </details>
+  </footer>
+</main>
+
+<dialog id="profile-dialog">
+  <div class="dlg-body">
+    <h3 id="pe-title"></h3>
+    <div class="field"><label for="pe-name">Name</label><input type="text" id="pe-name" placeholder="z. B. XRechnung 3.0 UBL" data-en-placeholder="e.g. XRechnung 3.0 UBL"></div>
+    <div class="field"><label for="pe-desc"><span lang="de">Beschreibung (optional)</span><span lang="en">Description (optional)</span></label><textarea id="pe-desc"></textarea></div>
+    <div class="drop" id="pe-drop">
+      <span lang="de">XSD-, Schematron- (.sch) oder XSLT-Dateien hierher ziehen – gerne ganze Ordner, damit include/import funktionieren.</span><span lang="en">Drag XSD, Schematron (.sch) or XSLT files here – whole folders work best so include/import resolve.</span>
+      <div class="row">
+        <button class="btn" id="pe-pick-files"><span lang="de">Dateien …</span><span lang="en">Files …</span></button>
+        <button class="btn" id="pe-pick-dir"><span lang="de">Ordner …</span><span lang="en">Folder …</span></button>
+      </div>
+      <input type="file" id="pe-files-input" multiple accept=".xsd,.sch,.xsl,.xslt,.xml" hidden>
+      <input type="file" id="pe-dir-input" webkitdirectory multiple hidden>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th><span lang="de">Einstieg</span><span lang="en">Entry</span></th><th><span lang="de">Datei</span><span lang="en">File</span></th><th><span lang="de">Typ</span><span lang="en">Type</span></th><th><span lang="de">Größe</span><span lang="en">Size</span></th><th></th></tr></thead>
+        <tbody id="pe-files"></tbody>
+      </table>
+    </div>
+    <div id="pe-entries" class="muted small"></div>
+    <div class="muted small"><span lang="de">XSD-Einstiegspunkte werden automatisch passend zum Wurzelelement des Dokuments gewählt (Namensraum + Element). Alle Schematron-Einstiegspunkte werden immer ausgeführt.</span><span lang="en">XSD entry points are chosen automatically to match the document's root element (namespace + element). All Schematron entry points are always run.</span></div>
+  </div>
+  <div class="dlg-foot">
+    <span id="pe-msg"></span>
+    <button class="btn" id="pe-cancel"><span lang="de">Abbrechen</span><span lang="en">Cancel</span></button>
+    <button class="btn primary" id="pe-save"><span lang="de">Profil speichern</span><span lang="en">Save profile</span></button>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script id="xmllint-src" type="text/plain">%%XMLLINT%%</script>
+<script id="xmllint-wasm" type="text/plain">%%WASM%%</script>
+<script>%%SAXON%%</script>
+<script>%%ENGINE%%</script>
+<script>%%APP%%</script>
+</body>
+</html>
